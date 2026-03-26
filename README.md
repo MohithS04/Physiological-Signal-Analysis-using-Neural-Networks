@@ -197,9 +197,6 @@ Both models stayed above 0.70 AUC under deliberately degraded signals. The singl
 **Mohith Reddy Seelam** — Department of Computer Science & Mathematical Sciences, Kent State University
 mseelam1@kent.edu
 
-**JungYoon Kim** — Department of Computer Science, Kent State University
-jkim78@kent.edu
-
 ---
 
 ## References
