@@ -6,6 +6,658 @@ Built at Kent State University as part of a comparative study on ECG signal clas
 
 ---
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECG Signal Analysis — Physiological Signal Pipeline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Space+Grotesk:wght@300;500;700&display=swap');
+
+  :root {
+    --bg: #060d12;
+    --panel: #0b1620;
+    --border: #1a2e3a;
+    --green: #00ff88;
+    --cyan: #00d4ff;
+    --amber: #ffaa00;
+    --red: #ff4466;
+    --purple: #aa66ff;
+    --text: #c8dde8;
+    --muted: #4a6272;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(180deg, #0a1822 0%, transparent 100%);
+  }
+
+  .pulse-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 12px var(--green);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .header-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--cyan);
+  }
+
+  .header-sub {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .channel {
+    background: var(--bg);
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .channel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .channel-label {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .channel-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 9px;
+    color: var(--muted);
+  }
+
+  .stat-val { font-weight: 600; }
+
+  .canvas-wrap {
+    position: relative;
+    height: 90px;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Grid lines overlay */
+  .grid-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Scan line */
+  .scan-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, transparent, var(--green), transparent);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .bottom-panel {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .metric-box {
+    background: var(--panel);
+    padding: 14px 16px;
+  }
+
+  .metric-label {
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .metric-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .metric-unit {
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .legend-bar {
+    display: flex;
+    gap: 24px;
+    padding: 12px 20px;
+    align-items: center;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .legend-line {
+    width: 24px; height: 2px;
+    border-radius: 1px;
+  }
+
+  .badge {
+    margin-left: auto;
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+
+  /* classifier bar at bottom */
+  .classifier-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .classifier-box {
+    background: var(--bg);
+    padding: 12px 16px;
+  }
+
+  .clf-title {
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .clf-bars { display: flex; flex-direction: column; gap: 5px; }
+
+  .clf-row { display: flex; align-items: center; gap: 8px; font-size: 8px; }
+
+  .clf-name { width: 48px; color: var(--muted); letter-spacing: 0.06em; }
+
+  .clf-bar-wrap {
+    flex: 1;
+    height: 5px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .clf-bar-fill {
+    height: 100%;
+    border-radius: 1px;
+    animation: grow 1.5s ease-out forwards;
+    transform-origin: left;
+  }
+
+  @keyframes grow {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+
+  .clf-val { width: 32px; text-align: right; }
+
+  .status-row {
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  .status-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="pulse-dot"></div>
+  <div class="header-title">ECG Signal Analysis — Multi-Dataset Neural Classification</div>
+  <div class="header-sub">Kent State University · SCI Lab</div>
+</div>
+
+<div class="grid">
+  <!-- Channel 1: Arrhythmia -->
+  <div class="channel">
+    <div class="channel-header">
+      <span class="channel-label" style="color: var(--green)">MIT-BIH Arrhythmia</span>
+      <div class="channel-stats">
+        <span>360 Hz</span>
+        <span style="color: var(--green)" class="stat-val">99.3% ACC</span>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <div class="grid-overlay"></div>
+      <canvas id="c1"></canvas>
+      <div class="scan-line" id="scan1"></div>
+    </div>
+  </div>
+
+  <!-- Channel 2: Apnea -->
+  <div class="channel">
+    <div class="channel-header">
+      <span class="channel-label" style="color: var(--cyan)">Apnea-ECG</span>
+      <div class="channel-stats">
+        <span>100 Hz</span>
+        <span style="color: var(--cyan)" class="stat-val">AUC 0.92</span>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <div class="grid-overlay"></div>
+      <canvas id="c2"></canvas>
+      <div class="scan-line" id="scan2"></div>
+    </div>
+  </div>
+
+  <!-- Channel 3: Noise Stress -->
+  <div class="channel">
+    <div class="channel-header">
+      <span class="channel-label" style="color: var(--amber)">Noise Stress Test</span>
+      <div class="channel-stats">
+        <span>360 Hz</span>
+        <span style="color: var(--amber)" class="stat-val">69% ACC</span>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <div class="grid-overlay"></div>
+      <canvas id="c3"></canvas>
+      <div class="scan-line" id="scan3"></div>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-panel">
+  <div class="metric-box">
+    <div class="metric-label">Heart Rate</div>
+    <div class="metric-value" style="color: var(--green)" id="hr">72</div>
+    <div class="metric-unit">BPM</div>
+  </div>
+  <div class="metric-box">
+    <div class="metric-label">RR Interval</div>
+    <div class="metric-value" style="color: var(--cyan)">0.83</div>
+    <div class="metric-unit">seconds</div>
+  </div>
+  <div class="metric-box">
+    <div class="metric-label">QRS Duration</div>
+    <div class="metric-value" style="color: var(--text)">0.078</div>
+    <div class="metric-unit">seconds</div>
+  </div>
+  <div class="metric-box">
+    <div class="metric-label">QT Interval</div>
+    <div class="metric-value" style="color: var(--purple)">0.289</div>
+    <div class="metric-unit">seconds</div>
+  </div>
+  <div class="metric-box">
+    <div class="metric-label">Classification</div>
+    <div class="metric-value" style="color: var(--green); font-size: 14px; margin-top: 4px;" id="clf-label">NORMAL</div>
+    <div class="metric-unit" id="clf-conf">confidence 0.997</div>
+  </div>
+</div>
+
+<div class="classifier-row">
+  <!-- Arrhythmia results -->
+  <div class="classifier-box">
+    <div class="clf-title">MIT-BIH Arrhythmia · Model Comparison</div>
+    <div class="clf-bars">
+      <div class="clf-row">
+        <span class="clf-name">SLNN</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 97.43%; background: var(--green); animation-delay: 0.1s"></div></div>
+        <span class="clf-val" style="color: var(--green)">97.4%</span>
+      </div>
+      <div class="clf-row">
+        <span class="clf-name">MLP</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 99.32%; background: var(--green); animation-delay: 0.25s"></div></div>
+        <span class="clf-val" style="color: var(--green)">99.3%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Apnea results -->
+  <div class="classifier-box">
+    <div class="clf-title">Apnea-ECG · Ensemble vs Single</div>
+    <div class="clf-bars">
+      <div class="clf-row">
+        <span class="clf-name">SLNN</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 75%; background: var(--muted); animation-delay: 0.2s"></div></div>
+        <span class="clf-val" style="color: var(--muted)">AUC 0.75</span>
+      </div>
+      <div class="clf-row">
+        <span class="clf-name">MLP</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 77%; background: var(--muted); animation-delay: 0.3s"></div></div>
+        <span class="clf-val" style="color: var(--muted)">AUC 0.77</span>
+      </div>
+      <div class="clf-row">
+        <span class="clf-name">Ensemble</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 92%; background: var(--cyan); animation-delay: 0.4s"></div></div>
+        <span class="clf-val" style="color: var(--cyan)">AUC 0.92</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Noise results -->
+  <div class="classifier-box">
+    <div class="clf-title">Noise Stress Test · Robustness</div>
+    <div class="clf-bars">
+      <div class="clf-row">
+        <span class="clf-name">SLNN</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 69.1%; background: var(--amber); animation-delay: 0.1s"></div></div>
+        <span class="clf-val" style="color: var(--amber)">69.1%</span>
+      </div>
+      <div class="clf-row">
+        <span class="clf-name">MLP</span>
+        <div class="clf-bar-wrap"><div class="clf-bar-fill" style="width: 67%; background: var(--amber); animation-delay: 0.25s"></div></div>
+        <span class="clf-val" style="color: var(--amber)">67.0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend-bar">
+  <div class="legend-item">
+    <div class="legend-line" style="background: var(--green)"></div>
+    Arrhythmia DB
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background: var(--cyan)"></div>
+    Apnea-ECG
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background: var(--amber)"></div>
+    Noise Stress
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background: var(--red); opacity: 0.7"></div>
+    Arrhythmic event
+  </div>
+  <div class="badge">SMOTE · Butterworth BPF · PQRST Features</div>
+</div>
+
+<div class="status-row">
+  <div class="status-dot"></div>
+  <span>LIVE SIMULATION</span>
+  <span>·</span>
+  <span>3-SECOND WINDOWS · 0.5s OVERLAP</span>
+  <span>·</span>
+  <span>15 FEATURES EXTRACTED PER WINDOW</span>
+  <span>·</span>
+  <span>WFDB · MEDIAPIPE · SKLEARN</span>
+</div>
+
+<script>
+// --- ECG waveform generators ---
+
+function ecgPulse(t, amplitude = 1, noise = 0) {
+  // PQRST morphology synthesizer
+  const mod = t % 1;
+  let y = 0;
+  const n = (Math.random() - 0.5) * noise;
+
+  // P wave
+  if (mod > 0.10 && mod < 0.22) {
+    y = 0.15 * amplitude * Math.sin(Math.PI * (mod - 0.10) / 0.12);
+  }
+  // Q dip
+  else if (mod > 0.28 && mod < 0.34) {
+    y = -0.12 * amplitude * Math.sin(Math.PI * (mod - 0.28) / 0.06);
+  }
+  // R spike
+  else if (mod > 0.33 && mod < 0.42) {
+    const peak = 0.375;
+    y = amplitude * Math.exp(-Math.pow((mod - peak) / 0.025, 2));
+  }
+  // S dip
+  else if (mod > 0.42 && mod < 0.50) {
+    y = -0.18 * amplitude * Math.exp(-Math.pow((mod - 0.46) / 0.025, 2));
+  }
+  // T wave
+  else if (mod > 0.52 && mod < 0.72) {
+    y = 0.28 * amplitude * Math.sin(Math.PI * (mod - 0.52) / 0.20);
+  }
+
+  return y + n;
+}
+
+function apneaEcg(t, apneaPhase = false) {
+  // During apnea: slower, irregular, amplitude-modulated
+  const base = apneaPhase ? 0.6 : 1.0;
+  const rateShift = apneaPhase ? 0.75 : 1.0;
+  const noise = apneaPhase ? 0.06 : 0.015;
+  return ecgPulse(t * rateShift, base, noise);
+}
+
+function noisyEcg(t, noiseLevel = 0.3) {
+  const clean = ecgPulse(t, 1, 0);
+  // baseline wander
+  const wander = 0.12 * Math.sin(2 * Math.PI * t * 0.2);
+  // EMG noise
+  const emg = noiseLevel * (Math.random() - 0.5) * 0.8;
+  // electrode motion burst
+  const burst = (Math.floor(t * 0.4) % 5 === 2) ? 0.4 * Math.sin(t * 80) * Math.random() : 0;
+  return clean + wander + emg + burst;
+}
+
+// --- Canvas renderer ---
+
+class ECGRenderer {
+  constructor(canvasId, scanId, generator, color, options = {}) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.scanEl = document.getElementById(scanId);
+    this.generator = generator;
+    this.color = color;
+    this.options = options;
+    this.buffer = [];
+    this.t = Math.random() * 100;
+    this.speed = options.speed || 0.004;
+    this.maxPoints = 0;
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  resize() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    this.canvas.width = rect.width * window.devicePixelRatio;
+    this.canvas.height = rect.height * window.devicePixelRatio;
+    this.canvas.style.width = rect.width + 'px';
+    this.canvas.style.height = rect.height + 'px';
+    this.maxPoints = Math.floor(rect.width * window.devicePixelRatio);
+    this.buffer = new Array(this.maxPoints).fill(0);
+    this.scanPos = 0;
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const mid = H / 2;
+    const amp = H * 0.35;
+
+    // Fade trail
+    ctx.fillStyle = 'rgba(6, 13, 18, 0.18)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Advance signal
+    this.t += this.speed;
+    const newVal = this.generator(this.t);
+    this.buffer.push(newVal);
+    if (this.buffer.length > this.maxPoints) this.buffer.shift();
+
+    // Draw waveform with glow
+    const drawLine = (alpha, lineWidth, blur) => {
+      ctx.save();
+      ctx.strokeStyle = this.color;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = lineWidth;
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = blur;
+      ctx.beginPath();
+      const step = W / this.maxPoints;
+      for (let i = 0; i < this.buffer.length; i++) {
+        const x = i * step;
+        const y = mid - this.buffer[i] * amp;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // Outer glow
+    drawLine(0.15, 8, 20);
+    // Mid glow
+    drawLine(0.4, 3, 10);
+    // Sharp line
+    drawLine(0.95, 1.5, 4);
+
+    // Mark arrhythmic events (channel 1 only)
+    if (this.options.markEvents && Math.abs(newVal) > 0.85) {
+      ctx.save();
+      ctx.strokeStyle = '#ff4466';
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      const x = (this.buffer.length - 1) * (W / this.maxPoints);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Scan line position
+    if (this.scanEl) {
+      const pct = ((this.buffer.length - 1) / this.maxPoints) * 100;
+      this.scanEl.style.left = pct + '%';
+    }
+  }
+}
+
+// --- Init renderers ---
+
+let apneaPhase = false;
+setInterval(() => { apneaPhase = !apneaPhase; }, 4000);
+
+const r1 = new ECGRenderer('c1', 'scan1',
+  t => ecgPulse(t, 1.0, 0.02), '#00ff88',
+  { speed: 0.0038, markEvents: true });
+
+const r2 = new ECGRenderer('c2', 'scan2',
+  t => apneaEcg(t, apneaPhase), '#00d4ff',
+  { speed: 0.0028 });
+
+const r3 = new ECGRenderer('c3', 'scan3',
+  t => noisyEcg(t, 0.25), '#ffaa00',
+  { speed: 0.0042 });
+
+// Animate HR readout
+let hrBase = 72;
+setInterval(() => {
+  hrBase = Math.max(58, Math.min(96, hrBase + (Math.random() - 0.5) * 4));
+  document.getElementById('hr').textContent = Math.round(hrBase);
+
+  // Occasionally flash arrhythmia
+  const isArr = Math.random() < 0.08;
+  const lbl = document.getElementById('clf-label');
+  const conf = document.getElementById('clf-conf');
+  if (isArr) {
+    lbl.textContent = 'ARRHYTHMIA';
+    lbl.style.color = '#ff4466';
+    conf.textContent = 'confidence 0.931';
+  } else {
+    lbl.textContent = 'NORMAL';
+    lbl.style.color = '#00ff88';
+    conf.textContent = 'confidence ' + (0.980 + Math.random() * 0.018).toFixed(3);
+  }
+}, 1200);
+
+// Main loop
+function loop() {
+  r1.draw();
+  r2.draw();
+  r3.draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
+
+
 ## Overview
 
 The project runs the same general pipeline — filter, segment, extract features, classify — across three datasets with meaningfully different tasks:
